@@ -277,6 +277,35 @@ private:
   int parallel_;
 };
 
+class MorkPixelMapper : public PixelMapper {
+  public:
+  virtual const char *GetName() const {
+    return "Mork";
+  }
+
+  virtual bool SetParameters(int chain, int parallel,
+                            const char *parameter_string) {
+    return true;
+  }
+
+  virtual bool GetSizeMapping(int matrix_width, int matrix_height,
+                              int *visible_width, int *visible_height) const {
+    // Chop width in half, double the height.
+    *visible_width = matrix_width / 2;
+    *visible_height = matrix_height * 2;
+    return true;
+  }
+
+  virtual void MapVisibleToMatrix(int matrix_width, int matrix_height,
+                                  int visible_x, int visible_y,
+                                  int *matrix_x, int *matrix_y) const {
+    int vis_width = matrix_width / 2;
+
+    *matrix_x = visible_x + vis_width * (visible_y / matrix_height);
+    *matrix_y = visible_y % matrix_height;
+  }
+};
+
 
 typedef std::map<std::string, PixelMapper*> MapperByName;
 static void RegisterPixelMapperInternal(MapperByName *registry,
@@ -296,6 +325,7 @@ static MapperByName *CreateMapperMap() {
   RegisterPixelMapperInternal(result, new UArrangementMapper());
   RegisterPixelMapperInternal(result, new VerticalMapper());
   RegisterPixelMapperInternal(result, new MirrorPixelMapper());
+  RegisterPixelMapperInternal(result, new MorkPixelMapper());
   return result;
 }
 

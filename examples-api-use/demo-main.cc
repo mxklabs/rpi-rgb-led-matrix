@@ -1026,32 +1026,6 @@ private:
   citizen* parents_;
 };
 
-class MorkPixelMapper : public PixelMapper {
-public:
-  virtual const char *GetName() const {
-    return "Mork";
-  }
-
-  virtual bool SetParameters(int chain, int parallel,
-                             const char *parameter_string) {
-    return true;
-  }
-
-  virtual bool GetSizeMapping(int matrix_width, int matrix_height,
-                              int *visible_width, int *visible_height) const {
-    // Chop width in half, double the height.
-    *visible_width = matrix_width / 2;
-    *visible_height = matrix_height * 2;
-    return true;
-  }
-
-  virtual void MapVisibleToMatrix(int matrix_width, int matrix_height,
-                                  int visible_x, int visible_y,
-                                  int *matrix_x, int *matrix_y) const {
-    *matrix_x = visible_x % matrix_width;
-    *matrix_y = visible_y + matrix_height * (visible_x / matrix_width);
-  }
-};
 
 static int usage(const char *progname) {
   fprintf(stderr, "usage: %s <options> -D <demo-nr> [optional parameter]\n",
@@ -1061,7 +1035,6 @@ static int usage(const char *progname) {
           "\t-D <demo-nr>              : Always needs to be set\n"
           );
 
-  RegisterPixelMapper(new MorkPixelMapper());
   rgb_matrix::PrintMatrixFlags(stderr);
 
   fprintf(stderr, "Demos, choosen with -D\n");
