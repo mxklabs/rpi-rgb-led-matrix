@@ -59,6 +59,7 @@ cdef extern from "led-matrix.h" namespace "rgb_matrix::RGBMatrix":
         int multiplexing
         int pwm_dither_bits
         int limit_refresh_rate_hz
+        int cpu_affinity
 
         bool disable_hardware_pulsing
         bool show_refresh_rate

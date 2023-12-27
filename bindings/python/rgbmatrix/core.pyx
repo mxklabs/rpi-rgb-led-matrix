@@ -178,6 +178,10 @@ cdef class RGBMatrixOptions:
         def __get__(self): return self.__options.limit_refresh_rate_hz
         def __set__(self, value): self.__options.limit_refresh_rate_hz = value
 
+    property cpu_affinity:
+        def __get__(self): return self.__options.cpu_affinity
+        def __set__(self, uint8_t value): self.__options.cpu_affinity = value
+
 
     # RuntimeOptions properties
 

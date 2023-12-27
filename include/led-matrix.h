@@ -155,6 +155,17 @@ public:
     // Limit refresh rate of LED panel. This will help on a loaded system
     // to keep a constant refresh rate. <= 0 for no limit.
     int limit_refresh_rate_hz;   // Flag: --led-limit-refresh
+
+    // Internally, the RGBMatrix class spawns a new thread that updates the
+    // display. This thread is subject to the Linux kernel's scheduling just
+    // like all other threads and may have to contend with other processes
+    // for CPU time. When this happens the display may flicker. To try and
+    // make a CPU core "more dedicated" to this thread, you can use the kernel
+    // command line argument "isolcpus" to avoid running other user processes
+    // on a specific set of cores and then use this field to put the thread
+    // onto one of those cores. You can this by setting this field to the
+    // index of a core on your system.
+    int cpu_affinity;
   };
 
   // Factory to create a matrix. Additional functionality includes dropping

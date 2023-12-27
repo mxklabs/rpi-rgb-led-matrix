@@ -24,6 +24,7 @@ internal struct InternalRGBLedMatrixOptions
     public byte show_refresh_rate;
     public byte inverse_colors;
     public int limit_refresh_rate_hz;
+    public int cpu_affinity;
 
     public InternalRGBLedMatrixOptions(RGBLedMatrixOptions opt)
     {
@@ -43,6 +44,7 @@ internal struct InternalRGBLedMatrixOptions
         scan_mode = (int)opt.ScanMode;
         show_refresh_rate = (byte)(opt.ShowRefreshRate ? 1 : 0);
         limit_refresh_rate_hz = opt.LimitRefreshRateHz;
+        cpu_affinity = opt.cpu_affinity;
         brightness = opt.Brightness;
         disable_hardware_pulsing = (byte)(opt.DisableHardwarePulsing ? 1 : 0);
         row_address_type = opt.RowAddressType;

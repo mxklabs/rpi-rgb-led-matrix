@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <iostream>
 
 #include "gpio.h"
 #include "thread.h"
@@ -122,12 +123,13 @@ class RGBMatrix::Impl::UpdateThread : public Thread {
 public:
   UpdateThread(GPIO *io, FrameCanvas *initial_frame,
                int pwm_dither_bits, bool show_refresh,
-               int limit_refresh_hz)
+               int limit_refresh_hz, int _cpu_affinity)
     : io_(io), show_refresh_(show_refresh),
       target_frame_usec_(limit_refresh_hz < 1 ? 0 : 1e6/limit_refresh_hz),
       running_(true),
       current_frame_(initial_frame), next_frame_(NULL),
-      requested_frame_multiple_(1) {
+      requested_frame_multiple_(1),
+      cpu_affinity(_cpu_affinity) {
     pthread_cond_init(&frame_done_, NULL);
     pthread_cond_init(&input_change_, NULL);
     switch (pwm_dither_bits) {
@@ -152,6 +154,19 @@ public:
   }
 
   virtual void Run() {
+
+    long tid = gettid();
+  
+    std::cout << "RGBMatrix::Impl::UpdateThread tid=" << tid << std::endl;
+
+    // Set CPU affinity for this thread, if requested.
+    if (cpu_affinity >= 0) {
+      cpu_set_t cpu_set;
+      CPU_ZERO(&cpu_set);
+      CPU_SET(cpu_affinity, &cpu_set);
+      sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
+    }
+
     unsigned frame_count = 0;
     unsigned low_bit_sequence = 0;
     uint32_t largest_time = 0;
@@ -259,6 +274,7 @@ private:
   FrameCanvas *current_frame_;
   FrameCanvas *next_frame_;
   unsigned requested_frame_multiple_;
+  int cpu_affinity;
 };
 
 // Some defaults. See options-initialize.cc for the command line parsing.
@@ -314,10 +330,11 @@ RGBMatrix::Options::Options() :
   pixel_mapper_config(NULL),
   panel_type(NULL),
 #ifdef FIXED_FRAME_MICROSECONDS
-  limit_refresh_rate_hz(1e6 / FIXED_FRAME_MICROSECONDS)
+  limit_refresh_rate_hz(1e6 / FIXED_FRAME_MICROSECONDS),
 #else
-  limit_refresh_rate_hz(0)
+  limit_refresh_rate_hz(0),
 #endif
+  cpu_affinity(-1)
 {
   // Nothing to see here.
 }
@@ -348,6 +365,7 @@ static void PrintOptions(const RGBMatrix::Options &o) {
   P_STR(pixel_mapper_config);
   P_STR(panel_type);
   P_INT(limit_refresh_rate_hz);
+  P_INT(cpu_affinity);
 #undef P_INT
 #undef P_STR
 #undef P_BOOL
@@ -469,7 +487,8 @@ bool RGBMatrix::Impl::StartRefresh() {
   if (updater_ == NULL && io_ != NULL) {
     updater_ = new UpdateThread(io_, active_, params_.pwm_dither_bits,
                                 params_.show_refresh_rate,
-                                params_.limit_refresh_rate_hz);
+                                params_.limit_refresh_rate_hz,
+                                params_.cpu_affinity);
     // If we have multiple processors, the kernel
     // jumps around between these, creating some global flicker.
     // So let's tie it to the last CPU available.
