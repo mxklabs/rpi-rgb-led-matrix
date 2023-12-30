@@ -28,9 +28,11 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <iostream>
 
 #include "gpio.h"
 #include "thread.h"
+#include "mork-timer.h"
 #include "framebuffer-internal.h"
 #include "multiplex-mappers-internal.h"
 
@@ -127,7 +129,13 @@ public:
       target_frame_usec_(limit_refresh_hz < 1 ? 0 : 1e6/limit_refresh_hz),
       running_(true),
       current_frame_(initial_frame), next_frame_(NULL),
-      requested_frame_multiple_(1) {
+      requested_frame_multiple_(1),
+      update_thread_timer  ("UpdateThread   "),
+      dump_matrix_timer    ("DumpMatrix     "),
+      swap_on_vsync_timer  ("SwapOnVSyncExch"),
+      read_input_bits_timer("ReadInput      "),
+      wait_framerate_timer ("WaitFramerate  "),
+      print_framerate_timer("PrintFramerate ") {
     pthread_cond_init(&frame_done_, NULL);
     pthread_cond_init(&input_change_, NULL);
     switch (pwm_dither_bits) {
@@ -152,6 +160,7 @@ public:
   }
 
   virtual void Run() {
+
     unsigned frame_count = 0;
     unsigned low_bit_sequence = 0;
     uint32_t largest_time = 0;
@@ -162,13 +171,18 @@ public:
     static const int kHoldffTimeUs = 2000 * 1000;
     uint32_t initial_holdoff_start = GetMicrosecondCounter();
     bool max_measure_enabled = false;
+    pthread_setname_np(pthread_self(), "rgbmatrix::UpdateThread");
 
     while (running()) {
+      update_thread_timer.start_measurement();
       const uint32_t start_time_us = GetMicrosecondCounter();
 
+      dump_matrix_timer.start_measurement();
       current_frame_->framebuffer()
         ->DumpToMatrix(io_, start_bit_[low_bit_sequence % 4]);
-
+      dump_matrix_timer.stop_measurement();
+  
+      //swap_on_vsync_timer.start_measurement();
       // SwapOnVSync() exchange.
       {
         MutexLock l(&frame_sync_);
@@ -185,8 +199,10 @@ public:
           pthread_cond_signal(&frame_done_);
         }
       }
+      //swap_on_vsync_timer.stop_measurement();
 
       // Read input bits.
+      //read_input_bits_timer.start_measurement();
       const gpio_bits_t inputs = io_->Read();
       if (inputs != last_gpio_bits) {
         last_gpio_bits = inputs;
@@ -194,16 +210,20 @@ public:
         gpio_inputs_ = inputs;
         pthread_cond_signal(&input_change_);
       }
+      //read_input_bits_timer.start_measurement();
 
       ++frame_count;
       ++low_bit_sequence;
 
+      //wait_framerate_timer.start_measurement();
       if (target_frame_usec_) {
         while ((GetMicrosecondCounter() - start_time_us) < target_frame_usec_) {
           // busy wait. We have our dedicated core, so ok to burn cycles.
         }
       }
+      //wait_framerate_timer.stop_measurement();
 
+      //print_framerate_timer.start_measurement();
       const uint32_t end_time_us = GetMicrosecondCounter();
       if (show_refresh_) {
         uint32_t usec = end_time_us - start_time_us;
@@ -218,6 +238,9 @@ public:
           max_measure_enabled = (end_time_us - initial_holdoff_start) > kHoldffTimeUs;
         }
       }
+      //print_framerate_timer.stop_measurement();
+
+      update_thread_timer.stop_measurement();
     }
   }
 
@@ -259,6 +282,13 @@ private:
   FrameCanvas *current_frame_;
   FrameCanvas *next_frame_;
   unsigned requested_frame_multiple_;
+
+  MorkTimer update_thread_timer;
+  MorkTimer dump_matrix_timer;
+  MorkTimer swap_on_vsync_timer;
+  MorkTimer read_input_bits_timer;
+  MorkTimer wait_framerate_timer;
+  MorkTimer print_framerate_timer;
 };
 
 // Some defaults. See options-initialize.cc for the command line parsing.

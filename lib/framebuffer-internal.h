@@ -18,6 +18,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "mork-timer.h"
+
 #include "hardware-mapping.h"
 #include "../include/graphics.h"
 
@@ -146,6 +148,16 @@ private:
                              PixelDesignator *designator);
   inline void  MapColors(uint8_t r, uint8_t g, uint8_t b,
                          uint16_t *red, uint16_t *green, uint16_t *blue);
+
+  MorkTimer fb_timer1;
+  MorkTimer fb_timer2;
+  MorkTimer fb_timer3;
+  MorkTimer fb_timer3a;
+  MorkTimer fb_timer3b;
+  MorkTimer fb_timer3c;
+  MorkTimer fb_timer3d;
+  MorkTimer fb_timer4;
+  MorkTimer fb_timer5;
   const int rows_;     // Number of rows. 16 or 32.
   const int parallel_; // Parallel rows of chains. 1 or 2.
   const int height_;   // rows * parallel

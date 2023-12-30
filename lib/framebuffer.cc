@@ -288,7 +288,17 @@ Framebuffer::Framebuffer(int rows, int columns, int parallel,
                          int scan_mode,
                          const char *led_sequence, bool inverse_color,
                          PixelDesignatorMap **mapper)
-  : rows_(rows),
+  : 
+    fb_timer1("ClkMask        "),
+    fb_timer2("SetDRow        "),
+    fb_timer3("ClockInData    "),
+    fb_timer3a("ValueAt        "),
+    fb_timer3b("WriteMaskedBits"),
+    fb_timer3c("SetBits        "),
+    fb_timer3d("ClearBits      "),
+    fb_timer4("WaitPulse      "),
+    fb_timer5("ClearSendPulse "),
+    rows_(rows),
     parallel_(parallel),
     height_(rows * parallel),
     columns_(columns),
@@ -817,6 +827,8 @@ void Framebuffer::CopyFrom(const Framebuffer *other) {
 }
 
 void Framebuffer::DumpToMatrix(GPIO *io, int pwm_low_bit) {
+
+  fb_timer1.start_measurement();
   const struct HardwareMapping &h = *hardware_mapping_;
   gpio_bits_t color_clk_mask = 0;  // Mask of bits while clocking in.
   color_clk_mask |= h.p0_r1 | h.p0_g1 | h.p0_b1 | h.p0_r2 | h.p0_g2 | h.p0_b2;
@@ -837,12 +849,15 @@ void Framebuffer::DumpToMatrix(GPIO *io, int pwm_low_bit) {
   }
 
   color_clk_mask |= h.clock;
+  fb_timer1.stop_measurement();
 
   // Depending if we do dithering, we might not always show the lowest bits.
   const int start_bit = std::max(pwm_low_bit, kBitPlanes - pwm_bits_);
 
   const uint8_t half_double = double_rows_/2;
   for (uint8_t row_loop = 0; row_loop < double_rows_; ++row_loop) {
+
+    fb_timer2.start_measurement();
     uint8_t d_row;
     switch (scan_mode_) {
     case 0:  // progressive
@@ -855,20 +870,33 @@ void Framebuffer::DumpToMatrix(GPIO *io, int pwm_low_bit) {
                ? (row_loop << 1)
                : ((row_loop - half_double) << 1) + 1);
     }
+    fb_timer2.stop_measurement(false);
 
     // Rows can't be switched very quickly without ghosting, so we do the
     // full PWM of one row before switching rows.
     for (int b = start_bit; b < kBitPlanes; ++b) {
+      fb_timer3.start_measurement();
+      fb_timer3a.start_measurement();
       gpio_bits_t *row_data = ValueAt(d_row, 0, b);
+      fb_timer3a.stop_measurement(false);
       // While the output enable is still on, we can already clock in the next
       // data.
       for (int col = 0; col < columns_; ++col) {
         const gpio_bits_t &out = *row_data++;
-        io->WriteMaskedBits(out, color_clk_mask);  // col + reset clock
-        io->SetBits(h.clock);               // Rising edge: clock color in.
-      }
-      io->ClearBits(color_clk_mask);    // clock back to normal.
 
+        fb_timer3b.start_measurement();
+        io->WriteMaskedBits(out, color_clk_mask);  // col + reset clock
+        fb_timer3b.stop_measurement(false);
+        fb_timer3c.start_measurement();
+        io->SetBits(h.clock);               // Rising edge: clock color in.
+        fb_timer3c.stop_measurement(false);
+      }
+      fb_timer3d.start_measurement();
+      io->ClearBits(color_clk_mask);    // clock back to normal.
+      fb_timer3d.stop_measurement(false);
+      fb_timer3.stop_measurement(false);
+
+      fb_timer5.start_measurement();
       // OE of the previous row-data must be finished before strobe.
       sOutputEnablePulser->WaitPulseFinished();
 
@@ -880,8 +908,18 @@ void Framebuffer::DumpToMatrix(GPIO *io, int pwm_low_bit) {
 
       // Now switch on for the sleep time necessary for that bit-plane.
       sOutputEnablePulser->SendPulse(b);
+      fb_timer5.stop_measurement(false);
     }
   }
+  fb_timer2.mark_iteration();
+  fb_timer3.mark_iteration();
+  fb_timer3a.mark_iteration();
+  fb_timer3b.mark_iteration();
+  fb_timer3c.mark_iteration();
+  fb_timer3d.mark_iteration();
+  
+  //fb_timer4.mark_iteration();
+  fb_timer5.mark_iteration();
 }
 }  // namespace internal
 }  // namespace rgb_matrix
